@@ -7,6 +7,8 @@ def generate_launch_description():
         executable='alaserPGO',
         name='alaserPGO',
         output='screen',
+        sigterm_timeout="120",  # Wait 120 seconds before escalating to SIGTERM
+        sigkill_timeout="10",  # Wait 5 more seconds before SIGKILL
         parameters=[{
             'keyframe_meter_gap': 0.2,
             'sc_dist_thres': 0.45

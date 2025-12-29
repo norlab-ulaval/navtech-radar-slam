@@ -24,6 +24,7 @@
 #include <pcl/octree/octree_pointcloud_voxelcentroid.h>
 #include <pcl/filters/crop_box.h> 
 #include <pcl_conversions/pcl_conversions.h>
+#include <pcl/io/pcd_io.h>
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
@@ -126,6 +127,23 @@ public:
         if (icp_calculation.joinable()) icp_calculation.join();
         if (viz_map.joinable()) viz_map.join();
         if (viz_path.joinable()) viz_path.join();
+        delete isam;
+    }
+
+    void shutdown() {
+        if (posegraph_slam.joinable()) posegraph_slam.join();
+        if (lc_detection.joinable()) lc_detection.join();
+        if (icp_calculation.joinable()) icp_calculation.join();
+        if (viz_map.joinable()) viz_map.join();
+        if (viz_path.joinable()) viz_path.join();
+
+        // Last factor graph update
+        process_icp();
+        runISAM2opt();
+
+        // Save to PCD file
+        saveMap();
+        saveTrajectory();
         delete isam;
     }
 
@@ -686,8 +704,49 @@ private:
         }
     }
 
-
+    bool saveTrajectory(void) {
+        std::string filename = "/workspaces/navtech-radar-slam/data/trajectory.txt";
+        std::ofstream file(filename);
+    
+        if (!file.is_open()) {
+            std::cerr << "Failed to open file: " << filename << std::endl;
+            return false;
         }
+        
+        // Write points
+        mKF.lock(); 
+        for (int node_idx=0; node_idx < int(keyframePosesUpdated.size()) - 1; node_idx++) 
+        {
+            const Pose6D& pose_est = keyframePosesUpdated.at(node_idx);          
+            tf2::Quaternion q;
+            q.setRPY(pose_est.roll, pose_est.pitch, pose_est.yaw);
+            file << std::fixed 
+                << std::setprecision(4)
+                << keyframeTimes.at(node_idx) << " " 
+                << pose_est.x << " " << pose_est.y << " " << pose_est.z << " " 
+                << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
+        }
+        mKF.unlock();
+        file.close();
+        std::cout << "Saved trajectory to " << filename << std::endl;
+        return true;
+    }
+
+    bool saveMap(void) {
+        std::string filename = "/workspaces/navtech-radar-slam/data/outputMap.pcd";
+        pcl::PointCloud<PointType>::Ptr outputMap = std::make_shared<pcl::PointCloud<PointType>>();
+        outputMap->clear();
+        mKF.lock(); 
+        for (int node_idx=0; node_idx < int(keyframePosesUpdated.size()); node_idx++) {
+            *outputMap += *local2global(keyframeLaserClouds[node_idx], keyframePosesUpdated[node_idx]);
+        }
+        mKF.unlock();
+        
+        // Save to PCD file
+        pcl::io::savePCDFileBinary(filename, *outputMap);
+        
+        std::cout << "Saved map to " << filename << std::endl; 
+        return true;
     }
 
     void pubMap(void)
@@ -712,6 +771,7 @@ private:
         sensor_msgs::msg::PointCloud2 laserCloudMapPGOMsg;
         pcl::toROSMsg(*laserCloudMapPGO, laserCloudMapPGOMsg);
         laserCloudMapPGOMsg.header.frame_id = "odom";
+        std::cout << "Publishing map" << std::endl;
         pubMapAftPGO->publish(laserCloudMapPGOMsg);
     }
 
@@ -744,7 +804,27 @@ int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<LaserPGO>();
-    rclcpp::spin(node);
+
+    // Register shutdown callback on the global context
+    auto context = rclcpp::contexts::get_global_default_context();
+
+    // Use a weak pointer to avoid keeping the node alive
+    std::weak_ptr<LaserPGO> weak_node = node;
+
+    context->add_on_shutdown_callback(
+        [weak_node]() {
+            if (auto n = weak_node.lock()) {
+                std::cout << "Received a shut down call" << std::endl;
+                n->shutdown();
+                std::cout << "Shutdown save completed" << std::endl;
+            }
+        });
+
+    try {
+        rclcpp::spin(node);
+    } catch (const std::exception & e) {
+        std::cout << "Exception: " << e.what();
+    }
     rclcpp::shutdown();
     return 0;
 }
