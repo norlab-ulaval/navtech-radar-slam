@@ -1,0 +1,36 @@
+{
+    "name": "ROS2 Humble Dev Container",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "args": {
+            "USERNAME": "vscode"
+        }
+    },
+    "runArgs": [
+        "--network=host",
+        "--cap-add=SYS_PTRACE",
+        "--security-opt",
+        "seccomp=unconfined"
+    ],
+    "containerEnv": {
+        "DISPLAY": "host.docker.internal:0"
+    },
+    "remoteUser": "vscode",
+    "features": {
+        "ghcr.io/devcontainers/features/common-utils:2": {}
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-iot.vscode-ros",
+                "twxs.cmake",
+                "mhutchie.git-graph"
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash"
+            }
+        }
+    },
+    "postCreateCommand": "sudo rosdep init && rosdep update && echo 'source /opt/ros/humble/setup.bash' >> ~/.bashrc"
+}
