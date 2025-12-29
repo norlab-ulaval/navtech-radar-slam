@@ -69,12 +69,12 @@ public:
 
     // User-side API
     void makeAndSaveScancontextAndKeys( pcl::PointCloud<SCPointType> & _scan_down );
-    std::pair<int, float> detectLoopClosureID( void ); // int: nearest node index, float: relative yaw  
+    std::tuple<int, float, float> detectLoopClosureID( void ); // int: nearest node index, float: relative yaw  
 
     // for ltslam 
     // User-side API for multi-session
     void saveScancontextAndKeys( Eigen::MatrixXd _scd );
-    std::pair<int, float> detectLoopClosureIDBetweenSession ( std::vector<float>& curr_key,  Eigen::MatrixXd& curr_desc);
+    std::tuple<int, float, float> detectLoopClosureIDBetweenSession ( std::vector<float>& curr_key,  Eigen::MatrixXd& curr_desc);
 
     const Eigen::MatrixXd& getConstRefRecentSCD(void);
 

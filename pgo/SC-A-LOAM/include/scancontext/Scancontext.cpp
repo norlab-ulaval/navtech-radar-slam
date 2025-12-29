@@ -264,7 +264,7 @@ void SCManager::setSCdistThres(double _new_thres)
     SC_DIST_THRES = _new_thres;
 } // SCManager::setThres
 
-std::pair<int, float> SCManager::detectLoopClosureIDBetweenSession (std::vector<float>& _curr_key, Eigen::MatrixXd& _curr_desc)
+std::tuple<int, float, float> SCManager::detectLoopClosureIDBetweenSession (std::vector<float>& _curr_key, Eigen::MatrixXd& _curr_desc)
 {
     int loop_id { -1 }; // init with -1, -1 means no loop (== LeGO-LOAM's variable "closestHistoryFrameID")
 
@@ -321,14 +321,14 @@ std::pair<int, float> SCManager::detectLoopClosureIDBetweenSession (std::vector<
 
     // To do: return also nn_align (i.e., yaw diff)
     float yaw_diff_rad = deg2rad(nn_align * PC_UNIT_SECTORANGLE);
-    std::pair<int, float> result {loop_id, yaw_diff_rad};
+    std::tuple<int, float, float> result {loop_id, yaw_diff_rad, min_dist};
 
     return result;
 
 } // SCManager::detectLoopClosureIDBetweenSession
 
 
-std::pair<int, float> SCManager::detectLoopClosureID ( void )
+std::tuple<int, float, float> SCManager::detectLoopClosureID ( void )
 {
     int loop_id { -1 }; // init with -1, -1 means no loop (== LeGO-LOAM's variable "closestHistoryFrameID")
 
@@ -340,7 +340,7 @@ std::pair<int, float> SCManager::detectLoopClosureID ( void )
      */
     if( (int)polarcontext_invkeys_mat_.size() < NUM_EXCLUDE_RECENT + 1)
     {
-        std::pair<int, float> result {loop_id, 0.0};
+        std::tuple<int, float, float> result {loop_id, 0.0, 0.0};
         return result; // Early return 
     }
 
@@ -401,21 +401,11 @@ std::pair<int, float> SCManager::detectLoopClosureID ( void )
     if( min_dist < SC_DIST_THRES )
     {
         loop_id = nn_idx; 
-    
-        // std::cout.precision(3); 
-        cout << "[Loop found] Nearest distance: " << min_dist << " btn " << polarcontexts_.size()-1 << " and " << nn_idx << "." << endl;
-        // cout << "[Loop found] yaw diff: " << nn_align * PC_UNIT_SECTORANGLE << " deg." << endl;
-    }
-    else
-    {
-        std::cout.precision(3); 
-        cout << "[Not loop] Nearest distance: " << min_dist << " btn " << polarcontexts_.size()-1 << " and " << nn_idx << "." << endl;
-        // cout << "[Not loop] yaw diff: " << nn_align * PC_UNIT_SECTORANGLE << " deg." << endl;
     }
 
     // To do: return also nn_align (i.e., yaw diff)
     float yaw_diff_rad = deg2rad(nn_align * PC_UNIT_SECTORANGLE);
-    std::pair<int, float> result {loop_id, yaw_diff_rad};
+    std::tuple<int, float, float> result {loop_id, yaw_diff_rad, min_dist};
 
     return result;
 
