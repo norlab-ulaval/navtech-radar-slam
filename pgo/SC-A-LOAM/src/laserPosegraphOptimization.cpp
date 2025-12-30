@@ -58,7 +58,6 @@
 #include <gtsam/geometry/Pose2.h>
 #include <gtsam/slam/PriorFactor.h>
 #include <gtsam/slam/BetweenFactor.h>
-#include <gtsam/navigation/GPSFactor.h>
 #include <gtsam/nonlinear/NonlinearFactorGraph.h>
 #include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
 #include <gtsam/nonlinear/ISAM2.h>
@@ -112,8 +111,6 @@ public:
             "/velodyne_cloud_registered_local", 100, std::bind(&LaserPGO::laserCloudFullResHandler, this, std::placeholders::_1));
         subLaserOdometry = this->create_subscription<nav_msgs::msg::Odometry>(
             "/aft_mapped_to_init", 100, std::bind(&LaserPGO::laserOdometryHandler, this, std::placeholders::_1));
-        subGPS = this->create_subscription<sensor_msgs::msg::NavSatFix>(
-            "/gps/fix", 100, std::bind(&LaserPGO::gpsHandler, this, std::placeholders::_1));
 
         pubOdomAftPGO = this->create_publisher<nav_msgs::msg::Odometry>("/aft_pgo_odom", 100);
         pubOdomRepubVerifier = this->create_publisher<nav_msgs::msg::Odometry>("/repub_odom", 100);
@@ -163,7 +160,6 @@ private:
 
     std::queue<nav_msgs::msg::Odometry::ConstSharedPtr> odometryBuf;
     std::queue<sensor_msgs::msg::PointCloud2::ConstSharedPtr> fullResBuf;
-    std::queue<sensor_msgs::msg::NavSatFix::ConstSharedPtr> gpsBuf;
     std::deque<std::pair<int, int> > scLoopICPBuf;
     std::set<std::pair<int, int>> scLoopICPProcessed;
 
@@ -193,7 +189,6 @@ private:
     noiseModel::Diagonal::shared_ptr priorNoise;
     noiseModel::Diagonal::shared_ptr odomNoise;
     noiseModel::Base::shared_ptr robustLoopNoise;
-    noiseModel::Base::shared_ptr robustGPSNoise;
 
     pcl::VoxelGrid<PointType> downSizeFilterScancontext;
     SCManager scManager;
@@ -211,11 +206,6 @@ private:
     pcl::VoxelGrid<PointType> downSizeFilterMapPGO;
     bool laserCloudMapPGORedraw = true;
 
-    bool useGPS = true;
-    sensor_msgs::msg::NavSatFix::ConstSharedPtr currGPS;
-    bool hasGPSforThisKF = false;
-    bool gpsOffsetInitialized = false; 
-    double gpsAltitudeInitOffset = 0.0;
     double recentOptimizedX = 0.0;
     double recentOptimizedY = 0.0;
 
@@ -225,7 +215,6 @@ private:
     
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subLaserCloudFullRes;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subLaserOdometry;
-    rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr subGPS;
 
     std::thread posegraph_slam;
     std::thread lc_detection;
@@ -247,15 +236,6 @@ private:
         mBuf.unlock();
     }
 
-    void gpsHandler(const sensor_msgs::msg::NavSatFix::ConstSharedPtr _gps)
-    {
-        if(useGPS) {
-            mBuf.lock();
-            gpsBuf.push(_gps);
-            mBuf.unlock();
-        }
-    }
-
     void initNoises( void )
     {
         gtsam::Vector priorNoiseVector6(6);
@@ -271,15 +251,6 @@ private:
         robustLoopNoise = gtsam::noiseModel::Robust::Create(
                         gtsam::noiseModel::mEstimator::Cauchy::Create(1), 
                         gtsam::noiseModel::Diagonal::Variances(robustNoiseVector6) );
-
-        double bigNoiseTolerentToXY = 1000000000.0; // 1e9
-        double gpsAltitudeNoiseScore = 250.0; // if height is misaligned after loop clsosing, use this value bigger
-        gtsam::Vector robustNoiseVector3(3); // gps factor has 3 elements (xyz)
-        robustNoiseVector3 << bigNoiseTolerentToXY, bigNoiseTolerentToXY, gpsAltitudeNoiseScore; 
-        robustGPSNoise = gtsam::noiseModel::Robust::Create(
-                        gtsam::noiseModel::mEstimator::Cauchy::Create(1), 
-                        gtsam::noiseModel::Diagonal::Variances(robustNoiseVector3) );
-
     }
 
     Pose6D getOdom(nav_msgs::msg::Odometry::ConstSharedPtr _odom)
@@ -525,19 +496,6 @@ private:
                 Pose6D pose_curr = getOdom(odometryBuf.front());
                 odometryBuf.pop();
 
-                double eps = 0.1; 
-                while (!gpsBuf.empty()) {
-                    auto thisGPS = gpsBuf.front();
-                    auto thisGPSTime = rclcpp::Time(thisGPS->header.stamp).seconds();
-                    if( abs(thisGPSTime - timeLaserOdometry) < eps ) {
-                        currGPS = thisGPS;
-                        hasGPSforThisKF = true; 
-                        break;
-                    } else {
-                        hasGPSforThisKF = false;
-                    }
-                    gpsBuf.pop();
-                }
                 mBuf.unlock(); 
 
                 odom_pose_prev = odom_pose_curr;
@@ -554,13 +512,6 @@ private:
 
                 if( ! isNowKeyFrame ) 
                     continue; 
-
-                if( !gpsOffsetInitialized ) {
-                    if(hasGPSforThisKF) { 
-                        gpsAltitudeInitOffset = currGPS->altitude;
-                        gpsOffsetInitialized = true;
-                    } 
-                }
 
                 pcl::PointCloud<PointType>::Ptr thisKeyFrameDS(new pcl::PointCloud<PointType>());
                 downSizeFilterScancontext.setInputCloud(thisKeyFrame);
@@ -602,14 +553,6 @@ private:
                     {
                         gtSAMgraph.add(gtsam::BetweenFactor<gtsam::Pose3>(prev_node_idx, curr_node_idx, poseFrom.between(poseTo), odomNoise));
 
-                        if(hasGPSforThisKF) {
-                            double curr_altitude_offseted = currGPS->altitude - gpsAltitudeInitOffset;
-                            mtxRecentPose.lock();
-                            gtsam::Point3 gpsConstraint(recentOptimizedX, recentOptimizedY, curr_altitude_offseted); 
-                            mtxRecentPose.unlock();
-                            gtSAMgraph.add(gtsam::GPSFactor(curr_node_idx, gpsConstraint, robustGPSNoise));
-                            cout << "GPS factor added at node " << curr_node_idx << endl;
-                        }
                         initialEstimate.insert(curr_node_idx, poseTo);                
                         runISAM2opt();
                     }
