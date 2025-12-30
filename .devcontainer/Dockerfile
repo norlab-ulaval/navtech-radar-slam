@@ -26,7 +26,16 @@ RUN apt-get update && apt-get install -y \
     ros-humble-rosbag2-storage-mcap \
     ros-humble-cv-bridge \
     ros-humble-image-transport \
+    ros-humble-foxglove-bridge \
     && rm -rf /var/lib/apt/lists/*
+
+RUN git clone https://bitbucket.org/norlab/navtech_driver.git /navtech_driver \
+    && mv /navtech_driver/ros/ros2/src/navtech_msgs /tmp/build_ws/src/navtech_msgs \
+    && rm -rf /navtech_driver \
+    && cd /tmp/build_ws \
+    && . /opt/ros/humble/setup.sh \
+    && colcon build --install-base /opt/ros/humble --merge-install \
+    && rm -rf /tmp/build_ws
 
 RUN cd /opt && git clone https://github.com/borglab/gtsam.git -b 4.2 \
     && cd gtsam \
