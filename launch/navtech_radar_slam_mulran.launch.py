@@ -9,18 +9,17 @@ def generate_launch_description():
     pkg_orora = get_package_share_directory('orora')
     pkg_sc_pgo = get_package_share_directory('sc_pgo')
     
-    # Arguments
-    seq_dir_arg = DeclareLaunchArgument(
-        'seq_dir', default_value='/default/path/to/seq_dir', description='Sequence directory path'
-    )
     do_slam_arg = DeclareLaunchArgument(
-        'do_slam', default_value='true', description='Enable SLAM'
+        'do_slam', default_value='false', description='Enable SLAM'
     )
     algorithm_arg = DeclareLaunchArgument(
         'algorithm', default_value='ORORA', description='Algorithm to use'
     )
     dataset_arg = DeclareLaunchArgument(
-        "dataset", default_value="oxford", description="Dataset to use"
+        "dataset", default_value="fomo", description="Dataset to use"
+    )
+    sim_time_arg = DeclareLaunchArgument(
+        "use_sim_time", default_value="true", description="Use sim time"
     )
 
     # Includes
@@ -30,10 +29,9 @@ def generate_launch_description():
             os.path.join(pkg_orora, 'launch', 'run_orora.launch.py')
         ),
         launch_arguments={
-            'seq_dir': LaunchConfiguration('seq_dir'),
-            'do_slam': LaunchConfiguration('do_slam'),
             'algorithm': LaunchConfiguration('algorithm'),
-            'dataset': LaunchConfiguration('dataset')
+            'dataset': LaunchConfiguration('dataset'),
+            "use_sim_time": LaunchConfiguration("use_sim_time")
         }.items()
     )
 
@@ -42,16 +40,14 @@ def generate_launch_description():
             os.path.join(pkg_sc_pgo, 'launch', 'sc_pgo.launch.py')
         ),
         launch_arguments={
-            'seq_dir': LaunchConfiguration('seq_dir'),
-            'do_slam': LaunchConfiguration('do_slam'),
-            'algorithm': LaunchConfiguration('algorithm'),
-            'dataset': LaunchConfiguration('dataset')
-        }.items()
+            "use_sim_time": LaunchConfiguration("use_sim_time"),
+            "do_slam": LaunchConfiguration("do_slam"),
+        }.items(),
     )
 
     return LaunchDescription([
-        seq_dir_arg,
         do_slam_arg,
+        sim_time_arg,
         algorithm_arg,
         dataset_arg,
         orora_launch,
