@@ -84,6 +84,15 @@ public:
         this->declare_parameter<double>("sc_dist_thres", 0.2);
         this->get_parameter("sc_dist_thres", scDistThres);
 
+        this->declare_parameter<double>("odom_noise_score", 0.1);
+        this->get_parameter("odom_noise_score", odomNoiseScore);
+
+        this->declare_parameter<double>("loop_noise_score", 0.5);
+        this->get_parameter("loop_noise_score", loopNoiseScore);
+
+        this->declare_parameter<double>("loop_fitness_score_threshold", 14.3);
+        this->get_parameter("loop_fitness_score_threshold", loopFitnessScoreThreshold);
+
         ISAM2Params parameters;
         parameters.relinearizeThreshold = 0.01;
         parameters.relinearizeSkip = 1;
@@ -189,6 +198,9 @@ private:
     pcl::VoxelGrid<PointType> downSizeFilterScancontext;
     SCManager scManager;
     double scDistThres;
+    double odomNoiseScore;
+    double loopNoiseScore;
+    double loopFitnessScoreThreshold;
 
     pcl::VoxelGrid<PointType> downSizeFilterICP;
     std::mutex mtxICP;
@@ -251,11 +263,9 @@ private:
         priorNoise = noiseModel::Diagonal::Variances(priorNoiseVector6);
 
         gtsam::Vector odomNoiseVector6(6);
-        double odomNoiseScore = 0.1;
         odomNoiseVector6 << odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore;
         odomNoise = noiseModel::Diagonal::Variances(odomNoiseVector6);
 
-        double loopNoiseScore = 0.5; // constant is ok...
         gtsam::Vector robustNoiseVector6(6); // gtsam::Pose3 factor has 6 elements (6D)
         robustNoiseVector6 << loopNoiseScore, loopNoiseScore, loopNoiseScore, loopNoiseScore, loopNoiseScore, loopNoiseScore;
         robustLoopNoise = gtsam::noiseModel::Robust::Create(
@@ -472,7 +482,6 @@ private:
         pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
         icp.align(*unused_result);
     
-        float loopFitnessScoreThreshold = 0.3; 
         if (icp.hasConverged() == false || icp.getFitnessScore() > loopFitnessScoreThreshold) {
             std::cout << "[SC loop] ICP fitness test failed (" << icp.getFitnessScore() << " > " << loopFitnessScoreThreshold << "). Reject this SC loop." << std::endl;
             return std::nullopt;
