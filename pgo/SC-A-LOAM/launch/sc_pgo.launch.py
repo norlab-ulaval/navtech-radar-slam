@@ -29,10 +29,6 @@ def generate_launch_description():
             'sc_dist_thres': 0.45,
             "use_sim_time": LaunchConfiguration("use_sim_time"),
         }],
-        remappings=[
-            ('/velodyne_cloud_registered_local', '/orora/cloud_local'),
-            ('/aft_mapped_to_init', '/orora/odom')
-        ],
         condition=IfCondition(LaunchConfiguration("do_slam")),
     )
 

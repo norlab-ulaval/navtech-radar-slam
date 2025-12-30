@@ -69,8 +69,7 @@
 
 using namespace gtsam;
 
-using std::cout;
-using std::endl;
+
 
 class LaserPGO : public rclcpp::Node
 {
@@ -108,17 +107,16 @@ public:
         downSizeFilterMapPGO.setLeafSize(map_vis_size, map_vis_size, map_vis_size);
 
         subLaserCloudFullRes = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-            "/velodyne_cloud_registered_local", 100, std::bind(&LaserPGO::laserCloudFullResHandler, this, std::placeholders::_1));
+            "cloud_local", 100, std::bind(&LaserPGO::laserCloudFullResHandler, this, std::placeholders::_1));
         subLaserOdometry = this->create_subscription<nav_msgs::msg::Odometry>(
-            "/aft_mapped_to_init", 100, std::bind(&LaserPGO::laserOdometryHandler, this, std::placeholders::_1));
+            "estimated_odom", 100, std::bind(&LaserPGO::laserOdometryHandler, this, std::placeholders::_1));
 
-        pubOdomAftPGO = this->create_publisher<nav_msgs::msg::Odometry>("/aft_pgo_odom", 100);
-        pubOdomRepubVerifier = this->create_publisher<nav_msgs::msg::Odometry>("/repub_odom", 100);
-        pubPathAftPGO = this->create_publisher<nav_msgs::msg::Path>("/aft_pgo_path", 100);
-        pubMapAftPGO = this->create_publisher<sensor_msgs::msg::PointCloud2>("/aft_pgo_map", 100);
+        pubOdomAftPGO = this->create_publisher<nav_msgs::msg::Odometry>("aft_pgo_odom", 100);
+        pubPathAftPGO = this->create_publisher<nav_msgs::msg::Path>("aft_pgo_path", 100);
+        pubMapAftPGO = this->create_publisher<sensor_msgs::msg::PointCloud2>("aft_pgo_map", 100);
 
-        pubLoopScanLocal = this->create_publisher<sensor_msgs::msg::PointCloud2>("/loop_scan_local", 100);
-        pubLoopSubmapLocal = this->create_publisher<sensor_msgs::msg::PointCloud2>("/loop_submap_local", 100);
+        pubLoopScanLocal = this->create_publisher<sensor_msgs::msg::PointCloud2>("loop_scan_local", 100);
+        pubLoopSubmapLocal = this->create_publisher<sensor_msgs::msg::PointCloud2>("loop_submap_local", 100);
 
         posegraph_slam = std::thread(&LaserPGO::process_pg, this);
         lc_detection = std::thread(&LaserPGO::process_lcd, this);
@@ -209,7 +207,7 @@ private:
     double recentOptimizedX = 0.0;
     double recentOptimizedY = 0.0;
 
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pubMapAftPGO_odom, pubOdomAftPGO, pubOdomRepubVerifier;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pubMapAftPGO_odom, pubOdomAftPGO;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pubPathAftPGO;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubMapAftPGO, pubLoopScanLocal, pubLoopSubmapLocal;
     
@@ -454,10 +452,10 @@ private:
         icp.align(*unused_result);
     
         if (icp.hasConverged() == false || icp.getFitnessScore() > loopFitnessScoreThreshold) {
-            std::cout << "[SC loop] ICP fitness test failed (" << icp.getFitnessScore() << " > " << loopFitnessScoreThreshold << "). Reject this SC loop." << std::endl;
+            RCLCPP_WARN_STREAM(this->get_logger(), "[SC loop] ICP fitness test failed (" << icp.getFitnessScore() << " > " << loopFitnessScoreThreshold << "). Reject this SC loop.");
             return std::nullopt;
         } else {
-            std::cout << "[SC loop] ICP fitness test passed (" << icp.getFitnessScore() << " < " << loopFitnessScoreThreshold << "). Add this SC loop." << std::endl;
+            RCLCPP_INFO_STREAM(this->get_logger(), "[SC loop] ICP fitness test passed (" << icp.getFitnessScore() << " < " << loopFitnessScoreThreshold << "). Add this SC loop.");
         }
 
         float x, y, z, roll, pitch, yaw;
@@ -476,7 +474,7 @@ private:
         {
             while ( !odometryBuf.empty() && !fullResBuf.empty() )
             {
-                std::cout << "[Pose Graph] Processing odometry and point cloud" << std::endl;
+                RCLCPP_DEBUG_STREAM(this->get_logger(), "[Pose Graph] Processing odometry and point cloud");
                 mBuf.lock();       
                 while (!odometryBuf.empty() && rclcpp::Time(odometryBuf.front()->header.stamp).seconds() < rclcpp::Time(fullResBuf.front()->header.stamp).seconds())
                     odometryBuf.pop();
@@ -542,7 +540,7 @@ private:
 
                     gtSAMgraphMade = true; 
 
-                    cout << "posegraph prior node " << init_node_idx << " added" << endl;
+                    RCLCPP_INFO_STREAM(this->get_logger(), "posegraph prior node " << init_node_idx << " added");
                 } else { 
                     const int prev_node_idx = keyframePoses.size() - 2; 
                     const int curr_node_idx = keyframePoses.size() - 1; 
@@ -559,7 +557,7 @@ private:
                     mtxPosegraph.unlock();
 
                     if(curr_node_idx % 5 == 0)
-                        cout << "posegraph odom node " << curr_node_idx << " added." << endl;
+                        RCLCPP_INFO_STREAM(this->get_logger(), "posegraph odom node " << curr_node_idx << " added.");
                 }
             }
 
@@ -589,20 +587,20 @@ private:
             mBuf.lock();
             auto it = std::find(scLoopICPBuf.begin(), scLoopICPBuf.end(), std::make_pair(prev_node_idx, curr_node_idx));
             if (it != scLoopICPBuf.end()) {
-                cout << "Loop betweeen " << prev_node_idx << " and " << curr_node_idx << " already in queue. Skipping." << endl;
+                RCLCPP_DEBUG_STREAM(this->get_logger(), "Loop betweeen " << prev_node_idx << " and " << curr_node_idx << " already in queue. Skipping.");
             } else if (is_processed) {
                 RCLCPP_DEBUG_STREAM(this->get_logger(), "Loop between " << prev_node_idx << " and " << curr_node_idx << " already processed. Skipping.");
             } else {
                 std::cout.precision(3); 
-                cout << "[Loop found] Nearest distance: " << min_dist << " btn " << prev_node_idx << " and " << curr_node_idx << "." << endl;
-                cout << "[Loop found] yaw diff: " << relative_yaw << " deg." << endl;
-                cout << "[Loop found] Added to queue." << endl;
+                RCLCPP_INFO_STREAM(this->get_logger(), "[Loop found] Nearest distance: " << min_dist << " btn " << prev_node_idx << " and " << curr_node_idx << ".");
+                RCLCPP_INFO_STREAM(this->get_logger(), "[Loop found] yaw diff: " << relative_yaw << " deg.");
+                RCLCPP_INFO_STREAM(this->get_logger(), "[Loop found] Added to queue.");
                 scLoopICPBuf.push_back(std::pair<int, int>(prev_node_idx, curr_node_idx));
             }
             mBuf.unlock();
         } else {
             std::cout.precision(3); 
-            cout << "[Not loop] Nearest distance: " << min_dist << " btn " << prev_node_idx << " and " << curr_node_idx << "." << endl;
+            RCLCPP_DEBUG_STREAM(this->get_logger(), "[Not loop] Nearest distance: " << min_dist << " btn " << prev_node_idx << " and " << curr_node_idx << ".");
         }
     }
 
@@ -619,7 +617,6 @@ private:
 
     void process_icp_loop(void)
     {
-        std::cout << "Starting ICP processing thread" << std::endl;
         while (rclcpp::ok())
         {
             while ( !scLoopICPBuf.empty() )
@@ -632,9 +629,8 @@ private:
     void process_icp(void)
     {
         if (!scLoopICPBuf.empty()) {
-            std::cout << "Processing ICP: num of candidates: " << scLoopICPBuf.size() << std::endl;
             if( scLoopICPBuf.size() > 30 ) {
-                std::cout << "Too many loop clousre candidates to be ICPed is waiting ... Do process_lcd less frequently (adjust loopClosureFrequency)" << std::endl;
+                RCLCPP_WARN_STREAM(this->get_logger(), "Too many loop clousre candidates to be ICPed is waiting ... Do process_lcd less frequently (adjust loopClosureFrequency)");
             }
 
             mBuf.lock(); 
@@ -647,7 +643,7 @@ private:
             auto relative_pose_optional = doICPVirtualRelative(prev_node_idx, curr_node_idx);
 
             if(relative_pose_optional) {
-                std::cout << "Adding relative pose between " << prev_node_idx << " and " << curr_node_idx << std::endl;
+                RCLCPP_INFO_STREAM(this->get_logger(), "Adding relative pose between " << prev_node_idx << " and " << curr_node_idx);
 
                 gtsam::Pose3 relative_pose = relative_pose_optional.value();
                 mtxPosegraph.lock();
@@ -666,7 +662,7 @@ private:
         std::ofstream file(filename);
     
         if (!file.is_open()) {
-            std::cerr << "Failed to open file: " << filename << std::endl;
+            RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to open file: " << filename);
             return false;
         }
         
@@ -685,7 +681,7 @@ private:
         }
         mKF.unlock();
         file.close();
-        std::cout << "Saved trajectory to " << filename << std::endl;
+        RCLCPP_INFO_STREAM(this->get_logger(), "Saved trajectory to " << filename);
         return true;
     }
 
@@ -702,7 +698,7 @@ private:
         // Save to PCD file
         pcl::io::savePCDFileBinary(filename, *outputMap);
         
-        std::cout << "Saved map to " << filename << std::endl; 
+        RCLCPP_INFO_STREAM(this->get_logger(), "Saved map to " << filename); 
         return true;
     }
 
@@ -728,7 +724,7 @@ private:
         sensor_msgs::msg::PointCloud2 laserCloudMapPGOMsg;
         pcl::toROSMsg(*laserCloudMapPGO, laserCloudMapPGOMsg);
         laserCloudMapPGOMsg.header.frame_id = "odom";
-        std::cout << "Publishing map" << std::endl;
+        RCLCPP_DEBUG_STREAM(this->get_logger(), "Publishing map");
         pubMapAftPGO->publish(laserCloudMapPGOMsg);
     }
 
