@@ -30,6 +30,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN git clone https://bitbucket.org/norlab/navtech_driver.git /navtech_driver \
+    && mkdir -p /tmp/build_ws/src \
     && mv /navtech_driver/ros/ros2/src/navtech_msgs /tmp/build_ws/src/navtech_msgs \
     && rm -rf /navtech_driver \
     && cd /tmp/build_ws \

@@ -10,7 +10,7 @@ def generate_launch_description():
     pkg_sc_pgo = get_package_share_directory('sc_pgo')
     
     do_slam_arg = DeclareLaunchArgument(
-        'do_slam', default_value='false', description='Enable SLAM'
+        'do_slam', default_value='true', description='Enable SLAM'
     )
     algorithm_arg = DeclareLaunchArgument(
         'algorithm', default_value='ORORA', description='Algorithm to use'
