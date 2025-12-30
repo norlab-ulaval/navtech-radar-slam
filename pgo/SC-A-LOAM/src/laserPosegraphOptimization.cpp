@@ -156,9 +156,10 @@ private:
     std::queue<sensor_msgs::msg::PointCloud2::ConstSharedPtr> fullResBuf;
     std::queue<sensor_msgs::msg::NavSatFix::ConstSharedPtr> gpsBuf;
     std::deque<std::pair<int, int> > scLoopICPBuf;
-    std::set<std::pair<int, int>> scLoopICPRejected;
+    std::set<std::pair<int, int>> scLoopICPProcessed;
 
     std::mutex mBuf;
+    std::mutex mBufProcessed;
     std::mutex mKF;
 
     double timeLaserOdometry = 0;
@@ -623,15 +624,21 @@ private:
         int prev_node_idx;
         float relative_yaw;
         float min_dist;
-        std::cout << "[performSCLoopClosure] num of candidates: " << scLoopICPBuf.size() << std::endl;
         std::tie(prev_node_idx, relative_yaw, min_dist) = scManager.detectLoopClosureID(); 
         if( prev_node_idx != -1 ) { 
+            bool is_processed = false;
+            mBufProcessed.lock();
+            if (scLoopICPProcessed.find(std::pair<int, int>(prev_node_idx, curr_node_idx)) != scLoopICPProcessed.end()) {
+                is_processed = true;
+            }
+            mBufProcessed.unlock();
+
             mBuf.lock();
             auto it = std::find(scLoopICPBuf.begin(), scLoopICPBuf.end(), std::make_pair(prev_node_idx, curr_node_idx));
             if (it != scLoopICPBuf.end()) {
                 cout << "Loop betweeen " << prev_node_idx << " and " << curr_node_idx << " already in queue. Skipping." << endl;
-            } else if (scLoopICPRejected.find(std::pair<int, int>(prev_node_idx, curr_node_idx)) != scLoopICPRejected.end()) {
-                cout << "Loop between " << prev_node_idx << " and " << curr_node_idx << " already rejected. Skipping." << endl;
+            } else if (is_processed) {
+                RCLCPP_DEBUG_STREAM(this->get_logger(), "Loop between " << prev_node_idx << " and " << curr_node_idx << " already processed. Skipping.");
             } else {
                 std::cout.precision(3); 
                 cout << "[Loop found] Nearest distance: " << min_dist << " btn " << prev_node_idx << " and " << curr_node_idx << "." << endl;
@@ -680,14 +687,12 @@ private:
             mBuf.lock(); 
             std::pair<int, int> loop_idx_pair = scLoopICPBuf.front();
             scLoopICPBuf.pop_front();
-            std::cout << "Size after pop: " << scLoopICPBuf.size() << ". Is empty: " << scLoopICPBuf.empty() << std::endl;
             mBuf.unlock(); 
 
             const int prev_node_idx = loop_idx_pair.first;
             const int curr_node_idx = loop_idx_pair.second;
             auto relative_pose_optional = doICPVirtualRelative(prev_node_idx, curr_node_idx);
 
-            std::cout << "Processing ICP: relative pose optional: " << relative_pose_optional.has_value() << std::endl;
             if(relative_pose_optional) {
                 std::cout << "Adding relative pose between " << prev_node_idx << " and " << curr_node_idx << std::endl;
 
@@ -696,11 +701,10 @@ private:
                 gtSAMgraph.add(gtsam::BetweenFactor<gtsam::Pose3>(prev_node_idx, curr_node_idx, relative_pose, robustLoopNoise));
                 runISAM2opt();
                 mtxPosegraph.unlock();
-            } else {
-                mBuf.lock();
-                scLoopICPRejected.insert(loop_idx_pair);
-                mBuf.unlock();
-            } 
+            }
+            mBufProcessed.lock();
+            scLoopICPProcessed.insert(loop_idx_pair);
+            mBufProcessed.unlock();
         }
     }
 
