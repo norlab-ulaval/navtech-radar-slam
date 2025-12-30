@@ -251,7 +251,8 @@ private:
         priorNoise = noiseModel::Diagonal::Variances(priorNoiseVector6);
 
         gtsam::Vector odomNoiseVector6(6);
-        odomNoiseVector6 << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4;
+        double odomNoiseScore = 0.1;
+        odomNoiseVector6 << odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore;
         odomNoise = noiseModel::Diagonal::Variances(odomNoiseVector6);
 
         double loopNoiseScore = 0.5; // constant is ok...
