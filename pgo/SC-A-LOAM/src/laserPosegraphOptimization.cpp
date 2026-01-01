@@ -22,7 +22,7 @@
 #include <pcl/filters/filter.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/octree/octree_pointcloud_voxelcentroid.h>
-#include <pcl/filters/crop_box.h> 
+#include <pcl/filters/crop_box.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/io/pcd_io.h>
 
@@ -99,7 +99,7 @@ public:
 
         scManager.setSCdistThres(scDistThres);
 
-        float filter_size = 0.4; 
+        float filter_size = 0.4;
         downSizeFilterScancontext.setLeafSize(filter_size, filter_size, filter_size);
         downSizeFilterICP.setLeafSize(filter_size, filter_size, filter_size);
 
@@ -154,7 +154,7 @@ public:
 private:
     double keyframeMeterGap;
     double movementAccumulation = 1000000.0; // large value means must add the first given frame.
-    bool isNowKeyFrame = false; 
+    bool isNowKeyFrame = false;
 
     std::queue<nav_msgs::msg::Odometry::ConstSharedPtr> odometryBuf;
     std::queue<sensor_msgs::msg::PointCloud2::ConstSharedPtr> fullResBuf;
@@ -170,7 +170,7 @@ private:
     pcl::PointCloud<PointType>::Ptr laserCloudFullRes = std::make_shared<pcl::PointCloud<PointType>>();
     pcl::PointCloud<PointType>::Ptr laserCloudMapAfterPGO = std::make_shared<pcl::PointCloud<PointType>>();
 
-    std::vector<pcl::PointCloud<PointType>::Ptr> keyframeLaserClouds; 
+    std::vector<pcl::PointCloud<PointType>::Ptr> keyframeLaserClouds;
     std::vector<Pose6D> keyframePoses;
     std::vector<Pose6D> keyframePosesUpdated;
     std::vector<double> keyframeTimes;
@@ -181,8 +181,8 @@ private:
     gtsam::ISAM2 *isam;
     gtsam::Values isamCurrentEstimate;
 
-    Pose6D odom_pose_prev {0.0, 0.0, 0.0, 0.0, 0.0, 0.0}; // init 
-    Pose6D odom_pose_curr {0.0, 0.0, 0.0, 0.0, 0.0, 0.0}; // init pose is zero 
+    Pose6D odom_pose_prev {0.0, 0.0, 0.0, 0.0, 0.0, 0.0}; // init
+    Pose6D odom_pose_curr {0.0, 0.0, 0.0, 0.0, 0.0, 0.0}; // init pose is zero
 
     noiseModel::Diagonal::shared_ptr priorNoise;
     noiseModel::Diagonal::shared_ptr odomNoise;
@@ -210,7 +210,7 @@ private:
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pubMapAftPGO_odom, pubOdomAftPGO;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pubPathAftPGO;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubMapAftPGO, pubLoopScanLocal, pubLoopSubmapLocal;
-    
+
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subLaserCloudFullRes;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subLaserOdometry;
 
@@ -247,7 +247,7 @@ private:
         gtsam::Vector robustNoiseVector6(6); // gtsam::Pose3 factor has 6 elements (6D)
         robustNoiseVector6 << loopNoiseScore, loopNoiseScore, loopNoiseScore, loopNoiseScore, loopNoiseScore, loopNoiseScore;
         robustLoopNoise = gtsam::noiseModel::Robust::Create(
-                        gtsam::noiseModel::mEstimator::Cauchy::Create(1), 
+                        gtsam::noiseModel::mEstimator::Cauchy::Create(1),
                         gtsam::noiseModel::Diagonal::Variances(robustNoiseVector6) );
     }
 
@@ -262,7 +262,7 @@ private:
         tf2::Quaternion q(quat.x, quat.y, quat.z, quat.w);
         tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
 
-        return Pose6D{tx, ty, tz, roll, pitch, yaw}; 
+        return Pose6D{tx, ty, tz, roll, pitch, yaw};
     }
 
     double transDiff(const Pose6D& _p1, const Pose6D& _p2)
@@ -283,7 +283,7 @@ private:
         cloudOut->resize(cloudSize);
 
         Eigen::Affine3f transCur = pcl::getTransformation(tf.x, tf.y, tf.z, tf.roll, tf.pitch, tf.yaw);
-        
+
         int numberOfCores = 16;
         #pragma omp parallel for num_threads(numberOfCores)
         for (int i = 0; i < cloudSize; ++i)
@@ -303,8 +303,8 @@ private:
         nav_msgs::msg::Odometry odomAftPGO;
         nav_msgs::msg::Path pathAftPGO;
         pathAftPGO.header.frame_id = "odom";
-        mKF.lock(); 
-        for (int node_idx=0; node_idx < int(keyframePosesUpdated.size()) - 1; node_idx++) 
+        mKF.lock();
+        for (int node_idx=0; node_idx < int(keyframePosesUpdated.size()) - 1; node_idx++)
         {
             const Pose6D& pose_est = keyframePosesUpdated.at(node_idx);
 
@@ -316,11 +316,11 @@ private:
             odomAftPGOthis.pose.pose.position.x = pose_est.x;
             odomAftPGOthis.pose.pose.position.y = pose_est.y;
             odomAftPGOthis.pose.pose.position.z = pose_est.z;
-            
+
             tf2::Quaternion q;
             q.setRPY(pose_est.roll, pose_est.pitch, pose_est.yaw);
             odomAftPGOthis.pose.pose.orientation = tf2::toMsg(q);
-            
+
             odomAftPGO = odomAftPGOthis;
 
             geometry_msgs::msg::PoseStamped poseStampAftPGO;
@@ -331,14 +331,14 @@ private:
             pathAftPGO.header.frame_id = "odom";
             pathAftPGO.poses.push_back(poseStampAftPGO);
         }
-        mKF.unlock(); 
+        mKF.unlock();
         pubOdomAftPGO->publish(odomAftPGO);
         pubPathAftPGO->publish(pathAftPGO);
     }
 
     void updatePoses(void)
     {
-        mKF.lock(); 
+        mKF.lock();
         for (int node_idx=0; node_idx < int(isamCurrentEstimate.size()); node_idx++)
         {
             Pose6D& p =keyframePosesUpdated[node_idx];
@@ -364,7 +364,7 @@ private:
     {
         isam->update(gtSAMgraph, initialEstimate);
         isam->update();
-        
+
         gtSAMgraph.resize(0);
         initialEstimate.clear();
 
@@ -382,9 +382,9 @@ private:
         cloudOut->resize(cloudSize);
 
         Eigen::Affine3f transCur = pcl::getTransformation(
-                                        transformIn.translation().x(), transformIn.translation().y(), transformIn.translation().z(), 
+                                        transformIn.translation().x(), transformIn.translation().y(), transformIn.translation().z(),
                                         transformIn.rotation().roll(), transformIn.rotation().pitch(), transformIn.rotation().yaw() );
-        
+
         int numberOfCores = 8;
 
         #pragma omp parallel for num_threads(numberOfCores)
@@ -407,9 +407,9 @@ private:
             if (keyNear < 0 || keyNear >= (int)keyframeLaserClouds.size() )
                 continue;
 
-            mKF.lock(); 
+            mKF.lock();
             *nearKeyframes += * local2global(keyframeLaserClouds[keyNear], keyframePosesUpdated[root_idx]);
-            mKF.unlock(); 
+            mKF.unlock();
         }
 
         if (nearKeyframes->empty())
@@ -423,11 +423,11 @@ private:
 
     std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf_idx )
     {
-        int historyKeyframeSearchNum = 25; 
+        int historyKeyframeSearchNum = 25;
         pcl::PointCloud<PointType>::Ptr cureKeyframeCloud(new pcl::PointCloud<PointType>());
         pcl::PointCloud<PointType>::Ptr targetKeyframeCloud(new pcl::PointCloud<PointType>());
-        loopFindNearKeyframesCloud(cureKeyframeCloud, _curr_kf_idx, 0, _loop_kf_idx); 
-        loopFindNearKeyframesCloud(targetKeyframeCloud, _loop_kf_idx, historyKeyframeSearchNum, _loop_kf_idx); 
+        loopFindNearKeyframesCloud(cureKeyframeCloud, _curr_kf_idx, 0, _loop_kf_idx);
+        loopFindNearKeyframesCloud(targetKeyframeCloud, _loop_kf_idx, historyKeyframeSearchNum, _loop_kf_idx);
 
         sensor_msgs::msg::PointCloud2 cureKeyframeCloudMsg;
         pcl::toROSMsg(*cureKeyframeCloud, cureKeyframeCloudMsg);
@@ -440,7 +440,7 @@ private:
         pubLoopSubmapLocal->publish(targetKeyframeCloudMsg);
 
         pcl::IterativeClosestPoint<PointType, PointType> icp;
-        icp.setMaxCorrespondenceDistance(150); 
+        icp.setMaxCorrespondenceDistance(150);
         icp.setMaximumIterations(100);
         icp.setTransformationEpsilon(1e-6);
         icp.setEuclideanFitnessEpsilon(1e-6);
@@ -450,7 +450,7 @@ private:
         icp.setInputTarget(targetKeyframeCloud);
         pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
         icp.align(*unused_result);
-    
+
         if (icp.hasConverged() == false || icp.getFitnessScore() > loopFitnessScoreThreshold) {
             RCLCPP_WARN_STREAM(this->get_logger(), "[SC loop] ICP fitness test failed (" << icp.getFitnessScore() << " > " << loopFitnessScoreThreshold << "). Reject this SC loop.");
             return std::nullopt;
@@ -475,7 +475,7 @@ private:
             while ( !odometryBuf.empty() && !fullResBuf.empty() )
             {
                 RCLCPP_DEBUG_STREAM(this->get_logger(), "[Pose Graph] Processing odometry and point cloud");
-                mBuf.lock();       
+                mBuf.lock();
                 while (!odometryBuf.empty() && rclcpp::Time(odometryBuf.front()->header.stamp).seconds() < rclcpp::Time(fullResBuf.front()->header.stamp).seconds())
                     odometryBuf.pop();
                 if (odometryBuf.empty())
@@ -494,7 +494,7 @@ private:
                 Pose6D pose_curr = getOdom(odometryBuf.front());
                 odometryBuf.pop();
 
-                mBuf.unlock(); 
+                mBuf.unlock();
 
                 odom_pose_prev = odom_pose_curr;
                 odom_pose_curr = pose_curr;
@@ -503,19 +503,19 @@ private:
 
                 if( movementAccumulation > keyframeMeterGap ) {
                     isNowKeyFrame = true;
-                    movementAccumulation = 0.0; 
+                    movementAccumulation = 0.0;
                 } else {
                     isNowKeyFrame = false;
                 }
 
-                if( ! isNowKeyFrame ) 
-                    continue; 
+                if( ! isNowKeyFrame )
+                    continue;
 
                 pcl::PointCloud<PointType>::Ptr thisKeyFrameDS(new pcl::PointCloud<PointType>());
                 downSizeFilterScancontext.setInputCloud(thisKeyFrame);
                 downSizeFilterScancontext.filter(*thisKeyFrameDS);
 
-                mKF.lock(); 
+                mKF.lock();
                 keyframeLaserClouds.push_back(thisKeyFrameDS);
                 keyframePoses.push_back(pose_curr);
                 keyframePosesUpdated.push_back(pose_curr);
@@ -524,26 +524,26 @@ private:
                 scManager.makeAndSaveScancontextAndKeys(*thisKeyFrameDS);
 
                 laserCloudMapPGORedraw = true;
-                mKF.unlock(); 
+                mKF.unlock();
 
                 if( ! gtSAMgraphMade) {
-                    const int init_node_idx = 0; 
+                    const int init_node_idx = 0;
                     gtsam::Pose3 poseOrigin = Pose6DtoGTSAMPose3(keyframePoses.at(init_node_idx));
 
                     mtxPosegraph.lock();
                     {
                         gtSAMgraph.add(gtsam::PriorFactor<gtsam::Pose3>(init_node_idx, poseOrigin, priorNoise));
                         initialEstimate.insert(init_node_idx, poseOrigin);
-                        runISAM2opt();          
-                    }   
+                        runISAM2opt();
+                    }
                     mtxPosegraph.unlock();
 
-                    gtSAMgraphMade = true; 
+                    gtSAMgraphMade = true;
 
                     RCLCPP_INFO_STREAM(this->get_logger(), "posegraph prior node " << init_node_idx << " added");
-                } else { 
-                    const int prev_node_idx = keyframePoses.size() - 2; 
-                    const int curr_node_idx = keyframePoses.size() - 1; 
+                } else {
+                    const int prev_node_idx = keyframePoses.size() - 2;
+                    const int curr_node_idx = keyframePoses.size() - 1;
                     gtsam::Pose3 poseFrom = Pose6DtoGTSAMPose3(keyframePoses.at(prev_node_idx));
                     gtsam::Pose3 poseTo = Pose6DtoGTSAMPose3(keyframePoses.at(curr_node_idx));
 
@@ -551,7 +551,7 @@ private:
                     {
                         gtSAMgraph.add(gtsam::BetweenFactor<gtsam::Pose3>(prev_node_idx, curr_node_idx, poseFrom.between(poseTo), odomNoise));
 
-                        initialEstimate.insert(curr_node_idx, poseTo);                
+                        initialEstimate.insert(curr_node_idx, poseTo);
                         runISAM2opt();
                     }
                     mtxPosegraph.unlock();
@@ -568,15 +568,15 @@ private:
 
     void performSCLoopClosure(void)
     {
-        if( (int)keyframePoses.size() < scManager.NUM_EXCLUDE_RECENT) 
+        if( (int)keyframePoses.size() < scManager.NUM_EXCLUDE_RECENT)
             return;
 
-        const int curr_node_idx = keyframePoses.size() - 1; 
+        const int curr_node_idx = keyframePoses.size() - 1;
         int prev_node_idx;
         float relative_yaw;
         float min_dist;
-        std::tie(prev_node_idx, relative_yaw, min_dist) = scManager.detectLoopClosureID(); 
-        if( prev_node_idx != -1 ) { 
+        std::tie(prev_node_idx, relative_yaw, min_dist) = scManager.detectLoopClosureID();
+        if( prev_node_idx != -1 ) {
             bool is_processed = false;
             mBufProcessed.lock();
             if (scLoopICPProcessed.find(std::pair<int, int>(prev_node_idx, curr_node_idx)) != scLoopICPProcessed.end()) {
@@ -591,7 +591,7 @@ private:
             } else if (is_processed) {
                 RCLCPP_DEBUG_STREAM(this->get_logger(), "Loop between " << prev_node_idx << " and " << curr_node_idx << " already processed. Skipping.");
             } else {
-                std::cout.precision(3); 
+                std::cout.precision(3);
                 RCLCPP_INFO_STREAM(this->get_logger(), "[Loop found] Nearest distance: " << min_dist << " btn " << prev_node_idx << " and " << curr_node_idx << ".");
                 RCLCPP_INFO_STREAM(this->get_logger(), "[Loop found] yaw diff: " << relative_yaw << " deg.");
                 RCLCPP_INFO_STREAM(this->get_logger(), "[Loop found] Added to queue.");
@@ -599,14 +599,14 @@ private:
             }
             mBuf.unlock();
         } else {
-            std::cout.precision(3); 
+            std::cout.precision(3);
             RCLCPP_DEBUG_STREAM(this->get_logger(), "[Not loop] Nearest distance: " << min_dist << " btn " << prev_node_idx << " and " << curr_node_idx << ".");
         }
     }
 
     void process_lcd(void)
     {
-        float loopClosureFrequency = 1.0; 
+        float loopClosureFrequency = 1.0;
         rclcpp::Rate rate(loopClosureFrequency);
         while (rclcpp::ok())
         {
@@ -633,10 +633,10 @@ private:
                 RCLCPP_WARN_STREAM(this->get_logger(), "Too many loop clousre candidates to be ICPed is waiting ... Do process_lcd less frequently (adjust loopClosureFrequency)");
             }
 
-            mBuf.lock(); 
+            mBuf.lock();
             std::pair<int, int> loop_idx_pair = scLoopICPBuf.front();
             scLoopICPBuf.pop_front();
-            mBuf.unlock(); 
+            mBuf.unlock();
 
             const int prev_node_idx = loop_idx_pair.first;
             const int curr_node_idx = loop_idx_pair.second;
@@ -660,23 +660,23 @@ private:
     bool saveTrajectory(void) {
         std::string filename = "/workspaces/navtech-radar-slam/data/trajectory.txt";
         std::ofstream file(filename);
-    
+
         if (!file.is_open()) {
             RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to open file: " << filename);
             return false;
         }
-        
+
         // Write points
-        mKF.lock(); 
-        for (int node_idx=0; node_idx < int(keyframePosesUpdated.size()) - 1; node_idx++) 
+        mKF.lock();
+        for (int node_idx=0; node_idx < int(keyframePosesUpdated.size()) - 1; node_idx++)
         {
-            const Pose6D& pose_est = keyframePosesUpdated.at(node_idx);          
+            const Pose6D& pose_est = keyframePosesUpdated.at(node_idx);
             tf2::Quaternion q;
             q.setRPY(pose_est.roll, pose_est.pitch, pose_est.yaw);
-            file << std::fixed 
+            file << std::fixed
                 << std::setprecision(4)
-                << keyframeTimes.at(node_idx) << " " 
-                << pose_est.x << " " << pose_est.y << " " << pose_est.z << " " 
+                << keyframeTimes.at(node_idx) << " "
+                << pose_est.x << " " << pose_est.y << " " << pose_est.z << " "
                 << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
         }
         mKF.unlock();
@@ -689,16 +689,16 @@ private:
         std::string filename = "/workspaces/navtech-radar-slam/data/outputMap.pcd";
         pcl::PointCloud<PointType>::Ptr outputMap = std::make_shared<pcl::PointCloud<PointType>>();
         outputMap->clear();
-        mKF.lock(); 
+        mKF.lock();
         for (int node_idx=0; node_idx < int(keyframePosesUpdated.size()); node_idx++) {
             *outputMap += *local2global(keyframeLaserClouds[node_idx], keyframePosesUpdated[node_idx]);
         }
         mKF.unlock();
-        
+
         // Save to PCD file
         pcl::io::savePCDFileBinary(filename, *outputMap);
-        
-        RCLCPP_INFO_STREAM(this->get_logger(), "Saved map to " << filename); 
+
+        RCLCPP_INFO_STREAM(this->get_logger(), "Saved map to " << filename);
         return true;
     }
 
@@ -709,14 +709,14 @@ private:
 
         laserCloudMapPGO->clear();
 
-        mKF.lock(); 
+        mKF.lock();
         for (int node_idx=0; node_idx < int(keyframePosesUpdated.size()); node_idx++) {
             if(counter % SKIP_FRAMES == 0) {
                 *laserCloudMapPGO += *local2global(keyframeLaserClouds[node_idx], keyframePosesUpdated[node_idx]);
             }
             counter++;
         }
-        mKF.unlock(); 
+        mKF.unlock();
 
         downSizeFilterMapPGO.setInputCloud(laserCloudMapPGO);
         downSizeFilterMapPGO.filter(*laserCloudMapPGO);
@@ -742,7 +742,7 @@ private:
 
     void process_viz_path(void)
     {
-        float hz = 5.0; 
+        float hz = 5.0;
         rclcpp::Rate rate(hz);
         while (rclcpp::ok()) {
             rate.sleep();
