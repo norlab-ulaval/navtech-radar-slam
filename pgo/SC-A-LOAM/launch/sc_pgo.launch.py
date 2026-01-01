@@ -7,6 +7,7 @@ from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 
 NAMESPACE = os.getenv("NAMESPACE")
+STORAGE_PATH = os.getenv("STORAGE_PATH", "/tmp")
 
 def generate_launch_description():
     sim_time_arg = DeclareLaunchArgument(
@@ -27,6 +28,7 @@ def generate_launch_description():
         parameters=[{
             'keyframe_meter_gap': 0.2,
             'sc_dist_thres': 0.45,
+            'pcd_save_dir': STORAGE_PATH,
             "use_sim_time": LaunchConfiguration("use_sim_time"),
         }],
         condition=IfCondition(LaunchConfiguration("do_slam")),

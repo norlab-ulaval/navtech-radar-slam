@@ -91,6 +91,9 @@ public:
         this->declare_parameter<double>("loop_fitness_score_threshold", 14.3);
         this->get_parameter("loop_fitness_score_threshold", loopFitnessScoreThreshold);
 
+        this->declare_parameter<std::string>("pcd_save_dir", "/tmp");
+        this->get_parameter("pcd_save_dir", pcd_save_dir);
+
         ISAM2Params parameters;
         parameters.relinearizeThreshold = 0.01;
         parameters.relinearizeSkip = 1;
@@ -213,6 +216,8 @@ private:
 
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subLaserCloudFullRes;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subLaserOdometry;
+
+    std::string pcd_save_dir;
 
     std::thread posegraph_slam;
     std::thread lc_detection;
@@ -658,7 +663,7 @@ private:
     }
 
     bool saveTrajectory(void) {
-        std::string filename = "/workspaces/navtech-radar-slam/data/trajectory.txt";
+        std::string filename = pcd_save_dir + "/trajectory.txt";
         std::ofstream file(filename);
 
         if (!file.is_open()) {
@@ -686,7 +691,7 @@ private:
     }
 
     bool saveMap(void) {
-        std::string filename = "/workspaces/navtech-radar-slam/data/outputMap.pcd";
+        std::string filename = pcd_save_dir + "/map.pcd";
         pcl::PointCloud<PointType>::Ptr outputMap = std::make_shared<pcl::PointCloud<PointType>>();
         outputMap->clear();
         mKF.lock();
