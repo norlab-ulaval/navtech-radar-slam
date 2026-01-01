@@ -151,7 +151,6 @@ public:
         // Save to PCD file
         saveMap();
         saveTrajectory();
-        delete isam;
     }
 
 private:
