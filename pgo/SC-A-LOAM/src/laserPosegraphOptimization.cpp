@@ -610,11 +610,13 @@ private:
 
     void process_lcd(void)
     {
-        float loopClosureFrequency = 1.0;
-        rclcpp::Rate rate(loopClosureFrequency);
         while (rclcpp::ok())
         {
-            rate.sleep();
+             // Sleep 1s
+            for (int i = 0; i < 10; ++i) {
+                if (!rclcpp::ok()) return;
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
             performSCLoopClosure();
         }
     }
@@ -623,9 +625,16 @@ private:
     {
         while (rclcpp::ok())
         {
-            while ( !scLoopICPBuf.empty() )
+            bool has_work = false;
+            mBuf.lock();
+            has_work = !scLoopICPBuf.empty();
+            mBuf.unlock();
+
+            if (has_work)
             {
                 process_icp();
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         }
     }
@@ -734,10 +743,12 @@ private:
 
     void process_viz_map(void)
     {
-        float vizmapFrequency = 0.1;
-        rclcpp::Rate rate(vizmapFrequency);
         while (rclcpp::ok()) {
-            rate.sleep();
+            // Sleep 10s
+            for (int i = 0; i < 100; ++i) {
+                if (!rclcpp::ok()) return;
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
             if(keyframeLaserClouds.size() > 1) {
                 pubMap();
             }
@@ -746,10 +757,12 @@ private:
 
     void process_viz_path(void)
     {
-        float hz = 5.0;
-        rclcpp::Rate rate(hz);
-        while (rclcpp::ok()) {
-            rate.sleep();
+         while (rclcpp::ok()) {
+            // Sleep 200ms
+            for (int i = 0; i < 2; ++i) {
+                if (!rclcpp::ok()) return;
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
             if(keyframePosesUpdated.size() > 1) {
                 pubPath();
             }
