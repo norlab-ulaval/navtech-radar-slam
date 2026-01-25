@@ -11,7 +11,7 @@ def generate_launch_description():
     
     # Arguments
     seq_dir_arg = DeclareLaunchArgument(
-        'seq_dir', default_value='/default/path/to/seq_dir', description='Sequence directory path'
+        'seq_dir', default_value='/workspaces/navtech-radar-slam/data/red_2025-10-14-11-41', description='Sequence directory path'
     )
     do_slam_arg = DeclareLaunchArgument(
         'do_slam', default_value='true', description='Enable SLAM'
@@ -20,7 +20,7 @@ def generate_launch_description():
         'algorithm', default_value='ORORA', description='Algorithm to use'
     )
     dataset_arg = DeclareLaunchArgument(
-        "dataset", default_value="oxford", description="Dataset to use"
+        "dataset", default_value="fomo", description="Dataset to use"
     )
 
     # Includes

@@ -9,7 +9,8 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'keyframe_meter_gap': 0.2,
-            'sc_dist_thres': 0.45
+            'sc_dist_thres': 0.45,
+            'pcd_save_dir': '/workspaces/navtech-radar-slam/data/offline'
         }],
         remappings=[
             ('/velodyne_cloud_registered_local', '/orora/cloud_local'),

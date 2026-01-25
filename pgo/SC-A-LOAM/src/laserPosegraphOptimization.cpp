@@ -82,6 +82,9 @@ public:
         this->declare_parameter<double>("sc_dist_thres", 0.2);
         this->get_parameter("sc_dist_thres", scDistThres);
 
+        this->declare_parameter<std::string>("pcd_save_dir", "/tmp");
+        this->get_parameter("pcd_save_dir", pcd_save_dir);
+
         ISAM2Params parameters;
         parameters.relinearizeThreshold = 0.01;
         parameters.relinearizeSkip = 1;
@@ -125,8 +128,27 @@ public:
         if (icp_calculation.joinable()) icp_calculation.join();
         if (viz_map.joinable()) viz_map.join();
         if (viz_path.joinable()) viz_path.join();
+
+        // Save to PCD file
+        saveTrajectory();
+        saveMap();
+
         delete isam;
     }
+
+    void shutdown() {
+        // if (posegraph_slam.joinable()) posegraph_slam.join();
+        // if (lc_detection.joinable()) lc_detection.join();
+        // if (icp_calculation.joinable()) icp_calculation.join();
+        // if (viz_map.joinable()) viz_map.join();
+        // if (viz_path.joinable()) viz_path.join();
+
+
+        // // Save to PCD file
+        // saveTrajectory();
+        // saveMap();
+    }
+
 
 private:
     double keyframeMeterGap;
@@ -200,6 +222,9 @@ private:
     std::thread icp_calculation;
     std::thread viz_map;
     std::thread viz_path;
+
+
+    std::string pcd_save_dir;
 
     void laserOdometryHandler(const nav_msgs::msg::Odometry::ConstSharedPtr _laserOdometry)
     {
@@ -665,6 +690,52 @@ private:
             std::chrono::milliseconds dura(2);
             std::this_thread::sleep_for(dura);
         }
+    }
+
+    
+    bool saveTrajectory(void) {
+        std::string filename = pcd_save_dir + "/trajectory.txt";
+        std::ofstream file(filename);
+
+        if (!file.is_open()) {
+            RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to open file: " << filename);
+            return false;
+        }
+
+        // Write points
+        mKF.lock();
+        for (int node_idx=0; node_idx < int(keyframePosesUpdated.size()) - 1; node_idx++)
+        {
+            const Pose6D& pose_est = keyframePosesUpdated.at(node_idx);
+            tf2::Quaternion q;
+            q.setRPY(pose_est.roll, pose_est.pitch, pose_est.yaw);
+            file << std::fixed
+                << std::setprecision(4)
+                << keyframeTimes.at(node_idx) << " "
+                << pose_est.x << " " << pose_est.y << " " << pose_est.z << " "
+                << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
+        }
+        mKF.unlock();
+        file.close();
+        RCLCPP_INFO_STREAM(this->get_logger(), "Saved trajectory to " << filename);
+        return true;
+    }
+
+    bool saveMap(void) {
+        std::string filename = pcd_save_dir + "/map.pcd";
+        pcl::PointCloud<PointType>::Ptr outputMap = std::make_shared<pcl::PointCloud<PointType>>();
+        outputMap->clear();
+        mKF.lock();
+        for (int node_idx=0; node_idx < int(keyframePosesUpdated.size()); node_idx++) {
+            *outputMap += *local2global(keyframeLaserClouds[node_idx], keyframePosesUpdated[node_idx]);
+        }
+        mKF.unlock();
+
+        // Save to PCD file
+        pcl::io::savePCDFileBinary(filename, *outputMap);
+
+        RCLCPP_INFO_STREAM(this->get_logger(), "Saved map to " << filename);
+        return true;
     }
 
     void pubMap(void)
