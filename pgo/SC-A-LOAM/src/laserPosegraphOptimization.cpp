@@ -509,6 +509,7 @@ private:
                     break;
                 }
 
+                auto timePointCloud = rclcpp::Time(fullResBuf.front()->header.stamp).seconds();
                 timeLaserOdometry = rclcpp::Time(odometryBuf.front()->header.stamp).seconds();
 
                 laserCloudFullRes->clear();
@@ -560,7 +561,8 @@ private:
                 downSizeFilterScancontext.setInputCloud(thisKeyFrame);
                 downSizeFilterScancontext.filter(*thisKeyFrameDS);
 
-                mKF.lock(); 
+                mKF.lock();
+                RCLCPP_INFO(this->get_logger(), "Keyframe point cloud %d added. Point cloud timestamp: %f", keyframeLaserClouds.size(), timePointCloud);
                 keyframeLaserClouds.push_back(thisKeyFrameDS);
                 keyframePoses.push_back(pose_curr);
                 keyframePosesUpdated.push_back(pose_curr);
@@ -585,7 +587,7 @@ private:
 
                     gtSAMgraphMade = true; 
 
-                    cout << "posegraph prior node " << init_node_idx << " added" << endl;
+                    RCLCPP_INFO(this->get_logger(), "posegraph prior node %d added", init_node_idx);
                 } else { 
                     const int prev_node_idx = keyframePoses.size() - 2; 
                     const int curr_node_idx = keyframePoses.size() - 1; 
@@ -602,7 +604,7 @@ private:
                             gtsam::Point3 gpsConstraint(recentOptimizedX, recentOptimizedY, curr_altitude_offseted); 
                             mtxRecentPose.unlock();
                             gtSAMgraph.add(gtsam::GPSFactor(curr_node_idx, gpsConstraint, robustGPSNoise));
-                            cout << "GPS factor added at node " << curr_node_idx << endl;
+                            RCLCPP_INFO(this->get_logger(), "GPS factor added at node %d", curr_node_idx);
                         }
                         initialEstimate.insert(curr_node_idx, poseTo);                
                         runISAM2opt();
@@ -610,7 +612,7 @@ private:
                     mtxPosegraph.unlock();
 
                     if(curr_node_idx % 5 == 0)
-                        cout << "posegraph odom node " << curr_node_idx << " added." << endl;
+                        RCLCPP_INFO(this->get_logger(), "posegraph odom node %d added", curr_node_idx);
                 }
             }
 
@@ -631,7 +633,7 @@ private:
             const int curr_node_idx = keyframePoses.size() - 1; 
             mBuf.lock();
             if (scLoopICPRejected.find(std::pair<int, int>(prev_node_idx, curr_node_idx)) == scLoopICPRejected.end()) {
-                cout << "Loop detected! - between " << prev_node_idx << " and " << curr_node_idx << "" << endl;
+                RCLCPP_INFO(this->get_logger(), "Loop detected! - between %d and %d", prev_node_idx, curr_node_idx);
                 scLoopICPBuf.push(std::pair<int, int>(prev_node_idx, curr_node_idx));
             }
             mBuf.unlock();
