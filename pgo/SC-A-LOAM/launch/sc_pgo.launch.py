@@ -26,8 +26,11 @@ def generate_launch_description():
         sigterm_timeout="120",  # Wait 120 seconds before escalating to SIGTERM
         sigkill_timeout="10",  # Wait 5 more seconds before SIGKILL
         parameters=[{
-            'keyframe_meter_gap': 0.2,
-            'sc_dist_thres': 0.45,
+            'keyframe_meter_gap': 1.0,
+            'keyframe_deg_gap': 5.0,
+            'sc_dist_thres': 0.2,
+            'loop_noise_score': 0.5,
+            'loop_fitness_score_threshold': 3.0,
             'pcd_save_dir': STORAGE_PATH,
             "use_sim_time": LaunchConfiguration("use_sim_time"),
         }],

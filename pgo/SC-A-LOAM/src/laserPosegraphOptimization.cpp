@@ -79,16 +79,17 @@ public:
         this->declare_parameter<double>("keyframe_meter_gap", 2.0);
         this->get_parameter("keyframe_meter_gap", keyframeMeterGap);
 
+        this->declare_parameter<double>("keyframe_deg_gap", 10.0);
+        this->get_parameter("keyframe_deg_gap", keyframeDegGap);
+        keyframeRadGap = keyframeDegGap * M_PI / 180.0; // deg to rad
+
         this->declare_parameter<double>("sc_dist_thres", 0.2);
         this->get_parameter("sc_dist_thres", scDistThres);
-
-        this->declare_parameter<double>("odom_noise_score", 0.1);
-        this->get_parameter("odom_noise_score", odomNoiseScore);
 
         this->declare_parameter<double>("loop_noise_score", 0.5);
         this->get_parameter("loop_noise_score", loopNoiseScore);
 
-        this->declare_parameter<double>("loop_fitness_score_threshold", 14.3);
+        this->declare_parameter<double>("loop_fitness_score_threshold", 0.3);
         this->get_parameter("loop_fitness_score_threshold", loopFitnessScoreThreshold);
 
         this->declare_parameter<std::string>("pcd_save_dir", "/tmp");
@@ -106,8 +107,8 @@ public:
         downSizeFilterScancontext.setLeafSize(filter_size, filter_size, filter_size);
         downSizeFilterICP.setLeafSize(filter_size, filter_size, filter_size);
 
-        float map_vis_size = 0.2;
-        downSizeFilterMapPGO.setLeafSize(map_vis_size, map_vis_size, map_vis_size);
+        float map_viz_size = 0.2;
+        downSizeFilterMapPGO.setLeafSize(map_viz_size, map_viz_size, map_viz_size);
 
         subLaserCloudFullRes = this->create_subscription<sensor_msgs::msg::PointCloud2>(
             "cloud_local", 100, std::bind(&LaserPGO::laserCloudFullResHandler, this, std::placeholders::_1));
@@ -155,7 +156,9 @@ public:
 
 private:
     double keyframeMeterGap;
-    double movementAccumulation = 1000000.0; // large value means must add the first given frame.
+    double keyframeDegGap, keyframeRadGap;
+    double translationAccumulated = 1000000.0; // large value means must add the first given frame.
+    double rotationAccumulated = 1000000.0; // large value means must add the first given frame.
     bool isNowKeyFrame = false;
 
     std::queue<nav_msgs::msg::Odometry::ConstSharedPtr> odometryBuf;
@@ -192,8 +195,7 @@ private:
 
     pcl::VoxelGrid<PointType> downSizeFilterScancontext;
     SCManager scManager;
-    double scDistThres;
-    double odomNoiseScore;
+    double scDistThres, scMaximumRadius;
     double loopNoiseScore;
     double loopFitnessScoreThreshold;
 
@@ -245,7 +247,9 @@ private:
         priorNoise = noiseModel::Diagonal::Variances(priorNoiseVector6);
 
         gtsam::Vector odomNoiseVector6(6);
-        odomNoiseVector6 << odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore;
+        // ROS1-style: tighter on translation (1e-6), looser on rotation (1e-4)
+        // This reflects typical SLAM behavior where translation is more reliable than rotation
+        odomNoiseVector6 << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4;
         odomNoise = noiseModel::Diagonal::Variances(odomNoiseVector6);
 
         gtsam::Vector robustNoiseVector6(6); // gtsam::Pose3 factor has 6 elements (6D)
@@ -269,9 +273,15 @@ private:
         return Pose6D{tx, ty, tz, roll, pitch, yaw};
     }
 
-    double transDiff(const Pose6D& _p1, const Pose6D& _p2)
+    Pose6D diffTransformation(const Pose6D& _p1, const Pose6D& _p2)
     {
-        return sqrt( (_p1.x - _p2.x)*(_p1.x - _p2.x) + (_p1.y - _p2.y)*(_p1.y - _p2.y) + (_p1.z - _p2.z)*(_p1.z - _p2.z) );
+        Eigen::Affine3f SE3_p1 = pcl::getTransformation(_p1.x, _p1.y, _p1.z, _p1.roll, _p1.pitch, _p1.yaw);
+        Eigen::Affine3f SE3_p2 = pcl::getTransformation(_p2.x, _p2.y, _p2.z, _p2.roll, _p2.pitch, _p2.yaw);
+        Eigen::Matrix4f SE3_delta0 = SE3_p1.matrix().inverse() * SE3_p2.matrix();
+        Eigen::Affine3f SE3_delta; SE3_delta.matrix() = SE3_delta0;
+        float dx, dy, dz, droll, dpitch, dyaw;
+        pcl::getTranslationAndEulerAngles(SE3_delta, dx, dy, dz, droll, dpitch, dyaw);
+        return Pose6D{double(abs(dx)), double(abs(dy)), double(abs(dz)), double(abs(droll)), double(abs(dpitch)), double(abs(dyaw))};
     }
 
     gtsam::Pose3 Pose6DtoGTSAMPose3(const Pose6D& p)
@@ -502,12 +512,16 @@ private:
 
                 odom_pose_prev = odom_pose_curr;
                 odom_pose_curr = pose_curr;
-                double delta_translation = transDiff(odom_pose_prev, odom_pose_curr);
-                movementAccumulation += delta_translation;
+                Pose6D dtf = diffTransformation(odom_pose_prev, odom_pose_curr);
 
-                if( movementAccumulation > keyframeMeterGap ) {
+                double delta_translation = sqrt(dtf.x*dtf.x + dtf.y*dtf.y + dtf.z*dtf.z);
+                translationAccumulated += delta_translation;
+                rotationAccumulated += (dtf.roll + dtf.pitch + dtf.yaw); // sum of absolute rotation changes
+
+                if( translationAccumulated > keyframeMeterGap || rotationAccumulated > keyframeRadGap ) {
                     isNowKeyFrame = true;
-                    movementAccumulation = 0.0;
+                    translationAccumulated = 0.0;
+                    rotationAccumulated = 0.0;
                 } else {
                     isNowKeyFrame = false;
                 }
