@@ -679,9 +679,6 @@ private:
                 gtSAMgraph.add(gtsam::BetweenFactor<gtsam::Pose3>(prev_node_idx, curr_node_idx, relative_pose, robustLoopNoise));
                 runISAM2opt();
                 mtxPosegraph.unlock();
-                
-                // Save trajectory after successful loop closure
-                saveTrajectory();
             }
             mBufProcessed.lock();
             scLoopICPProcessed.insert(loop_idx_pair);
