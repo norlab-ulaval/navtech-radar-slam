@@ -86,13 +86,10 @@ public:
         this->declare_parameter<double>("sc_dist_thres", 0.2);
         this->get_parameter("sc_dist_thres", scDistThres);
 
-        this->declare_parameter<double>("odom_noise_score", 0.1);
-        this->get_parameter("odom_noise_score", odomNoiseScore);
-
         this->declare_parameter<double>("loop_noise_score", 0.5);
         this->get_parameter("loop_noise_score", loopNoiseScore);
 
-        this->declare_parameter<double>("loop_fitness_score_threshold", 14.3);
+        this->declare_parameter<double>("loop_fitness_score_threshold", 0.3);
         this->get_parameter("loop_fitness_score_threshold", loopFitnessScoreThreshold);
 
         this->declare_parameter<std::string>("pcd_save_dir", "/tmp");
@@ -110,8 +107,8 @@ public:
         downSizeFilterScancontext.setLeafSize(filter_size, filter_size, filter_size);
         downSizeFilterICP.setLeafSize(filter_size, filter_size, filter_size);
 
-        float map_vis_size = 0.2;
-        downSizeFilterMapPGO.setLeafSize(map_vis_size, map_vis_size, map_vis_size);
+        float map_viz_size = 0.2;
+        downSizeFilterMapPGO.setLeafSize(map_viz_size, map_viz_size, map_viz_size);
 
         subLaserCloudFullRes = this->create_subscription<sensor_msgs::msg::PointCloud2>(
             "cloud_local", 100, std::bind(&LaserPGO::laserCloudFullResHandler, this, std::placeholders::_1));
@@ -198,8 +195,7 @@ private:
 
     pcl::VoxelGrid<PointType> downSizeFilterScancontext;
     SCManager scManager;
-    double scDistThres;
-    double odomNoiseScore;
+    double scDistThres, scMaximumRadius;
     double loopNoiseScore;
     double loopFitnessScoreThreshold;
 
@@ -251,7 +247,9 @@ private:
         priorNoise = noiseModel::Diagonal::Variances(priorNoiseVector6);
 
         gtsam::Vector odomNoiseVector6(6);
-        odomNoiseVector6 << odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore;
+        // ROS1-style: tighter on translation (1e-6), looser on rotation (1e-4)
+        // This reflects typical SLAM behavior where translation is more reliable than rotation
+        odomNoiseVector6 << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4;
         odomNoise = noiseModel::Diagonal::Variances(odomNoiseVector6);
 
         gtsam::Vector robustNoiseVector6(6); // gtsam::Pose3 factor has 6 elements (6D)
