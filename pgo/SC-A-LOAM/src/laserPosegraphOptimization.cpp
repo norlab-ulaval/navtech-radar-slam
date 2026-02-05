@@ -79,6 +79,10 @@ public:
         this->declare_parameter<double>("keyframe_meter_gap", 2.0);
         this->get_parameter("keyframe_meter_gap", keyframeMeterGap);
 
+        this->declare_parameter<double>("keyframe_deg_gap", 10.0);
+        this->get_parameter("keyframe_deg_gap", keyframeDegGap);
+        keyframeRadGap = keyframeDegGap * M_PI / 180.0; // deg to rad
+
         this->declare_parameter<double>("sc_dist_thres", 0.2);
         this->get_parameter("sc_dist_thres", scDistThres);
 
@@ -155,7 +159,9 @@ public:
 
 private:
     double keyframeMeterGap;
-    double movementAccumulation = 1000000.0; // large value means must add the first given frame.
+    double keyframeDegGap, keyframeRadGap;
+    double translationAccumulated = 1000000.0; // large value means must add the first given frame.
+    double rotationAccumulated = 1000000.0; // large value means must add the first given frame.
     bool isNowKeyFrame = false;
 
     std::queue<nav_msgs::msg::Odometry::ConstSharedPtr> odometryBuf;
@@ -269,9 +275,15 @@ private:
         return Pose6D{tx, ty, tz, roll, pitch, yaw};
     }
 
-    double transDiff(const Pose6D& _p1, const Pose6D& _p2)
+    Pose6D diffTransformation(const Pose6D& _p1, const Pose6D& _p2)
     {
-        return sqrt( (_p1.x - _p2.x)*(_p1.x - _p2.x) + (_p1.y - _p2.y)*(_p1.y - _p2.y) + (_p1.z - _p2.z)*(_p1.z - _p2.z) );
+        Eigen::Affine3f SE3_p1 = pcl::getTransformation(_p1.x, _p1.y, _p1.z, _p1.roll, _p1.pitch, _p1.yaw);
+        Eigen::Affine3f SE3_p2 = pcl::getTransformation(_p2.x, _p2.y, _p2.z, _p2.roll, _p2.pitch, _p2.yaw);
+        Eigen::Matrix4f SE3_delta0 = SE3_p1.matrix().inverse() * SE3_p2.matrix();
+        Eigen::Affine3f SE3_delta; SE3_delta.matrix() = SE3_delta0;
+        float dx, dy, dz, droll, dpitch, dyaw;
+        pcl::getTranslationAndEulerAngles(SE3_delta, dx, dy, dz, droll, dpitch, dyaw);
+        return Pose6D{double(abs(dx)), double(abs(dy)), double(abs(dz)), double(abs(droll)), double(abs(dpitch)), double(abs(dyaw))};
     }
 
     gtsam::Pose3 Pose6DtoGTSAMPose3(const Pose6D& p)
@@ -502,12 +514,16 @@ private:
 
                 odom_pose_prev = odom_pose_curr;
                 odom_pose_curr = pose_curr;
-                double delta_translation = transDiff(odom_pose_prev, odom_pose_curr);
-                movementAccumulation += delta_translation;
+                Pose6D dtf = diffTransformation(odom_pose_prev, odom_pose_curr);
 
-                if( movementAccumulation > keyframeMeterGap ) {
+                double delta_translation = sqrt(dtf.x*dtf.x + dtf.y*dtf.y + dtf.z*dtf.z);
+                translationAccumulated += delta_translation;
+                rotationAccumulated += (dtf.roll + dtf.pitch + dtf.yaw); // sum of absolute rotation changes
+
+                if( translationAccumulated > keyframeMeterGap || rotationAccumulated > keyframeRadGap ) {
                     isNowKeyFrame = true;
-                    movementAccumulation = 0.0;
+                    translationAccumulated = 0.0;
+                    rotationAccumulated = 0.0;
                 } else {
                     isNowKeyFrame = false;
                 }
@@ -663,6 +679,9 @@ private:
                 gtSAMgraph.add(gtsam::BetweenFactor<gtsam::Pose3>(prev_node_idx, curr_node_idx, relative_pose, robustLoopNoise));
                 runISAM2opt();
                 mtxPosegraph.unlock();
+                
+                // Save trajectory after successful loop closure
+                saveTrajectory();
             }
             mBufProcessed.lock();
             scLoopICPProcessed.insert(loop_idx_pair);
