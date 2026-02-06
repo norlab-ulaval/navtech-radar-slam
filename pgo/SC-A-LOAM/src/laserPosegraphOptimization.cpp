@@ -83,13 +83,16 @@ public:
         this->get_parameter("keyframe_deg_gap", keyframeDegGap);
         keyframeRadGap = keyframeDegGap * M_PI / 180.0; // deg to rad
 
-        this->declare_parameter<double>("sc_dist_thres", 0.2);
+        this->declare_parameter<double>("sc_dist_thres", 0.45);
         this->get_parameter("sc_dist_thres", scDistThres);
 
-        this->declare_parameter<double>("loop_noise_score", 0.5);
+        this->declare_parameter<double>("loop_noise_score", 3.0);
         this->get_parameter("loop_noise_score", loopNoiseScore);
 
-        this->declare_parameter<double>("loop_fitness_score_threshold", 0.3);
+        this->declare_parameter<double>("odom_noise_score", 0.1);
+        this->get_parameter("odom_noise_score", odomNoiseScore);
+
+        this->declare_parameter<double>("loop_fitness_score_threshold", 3.0);
         this->get_parameter("loop_fitness_score_threshold", loopFitnessScoreThreshold);
 
         this->declare_parameter<std::string>("pcd_save_dir", "/tmp");
@@ -196,7 +199,7 @@ private:
     pcl::VoxelGrid<PointType> downSizeFilterScancontext;
     SCManager scManager;
     double scDistThres, scMaximumRadius;
-    double loopNoiseScore;
+    double loopNoiseScore, odomNoiseScore;
     double loopFitnessScoreThreshold;
 
     pcl::VoxelGrid<PointType> downSizeFilterICP;
@@ -247,9 +250,7 @@ private:
         priorNoise = noiseModel::Diagonal::Variances(priorNoiseVector6);
 
         gtsam::Vector odomNoiseVector6(6);
-        // ROS1-style: tighter on translation (1e-6), looser on rotation (1e-4)
-        // This reflects typical SLAM behavior where translation is more reliable than rotation
-        odomNoiseVector6 << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4;
+        odomNoiseVector6 << odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore, odomNoiseScore;
         odomNoise = noiseModel::Diagonal::Variances(odomNoiseVector6);
 
         gtsam::Vector robustNoiseVector6(6); // gtsam::Pose3 factor has 6 elements (6D)
