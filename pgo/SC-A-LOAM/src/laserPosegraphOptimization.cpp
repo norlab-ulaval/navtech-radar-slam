@@ -501,7 +501,7 @@ private:
 
                 if( mouvementAccumulation > keyframeMeterGap) {
                     isNowKeyFrame = true;
-                    translationAccumulated = 0.0;
+                    mouvementAccumulation = 0.0;
                 } else {
                     isNowKeyFrame = false;
                 }
